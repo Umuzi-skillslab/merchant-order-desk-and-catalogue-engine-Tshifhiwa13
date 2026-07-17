@@ -1,6 +1,0 @@
-com\paynestsystem\domain\Customer.class
-com\paynestsystem\domain\Product.class
-com\paynestsystem\service\OrderService.class
-com\paynestsystem\app\PayNestApplication.class
-com\paynestsystem\domain\OrderItem.class
-com\paynestsystem\domain\Order.class
