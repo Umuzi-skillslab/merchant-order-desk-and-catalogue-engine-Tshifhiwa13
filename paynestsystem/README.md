@@ -22,7 +22,7 @@ OrderItemTest.java: Unit test for the OrderItem domain class.
 ```bash
 #Compile the project
 
-cd merchant-order-desk-and-catalogue-engine-Tshifhiwa13-main
+cd merchant-order-desk-and-catalogue-engine-Tshifhiwa13
 cd paynestsystem 
 mvn clean compile
 
