@@ -37,4 +37,3 @@ public class OrderItemTest {
             "Null product should throw exception");
     }
 }
-
