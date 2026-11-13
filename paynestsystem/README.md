@@ -1,13 +1,14 @@
 # PayNest: Merchant Order Desk and Unified Checkout
+
 A commerce system built in plain Java 21 with Maven.
 
-- Mercehant order desk built the merchant order desk: customers, products, orders and a printed invoice.
--Unified checkout adds a unified checkout: one checkout path that accepts any payment rail (card, EFT, in-app wallet and buy-now-pay-later). The order total is the same for every rail; only the way the customer pays changes.
+-Merchant order desk:customers, products, orders and a printed invoice.
+-Unified checkout: one checkout path that accepts any payment rail (card, EFT, in-app wallet and buy-now-pay-later). The order total is the same for every rail; only the way the customer pays changes.
 
 ## Requirements
 
-- Java 21 
-- Maven 3.9 or newer 
+- Java 21
+- Maven 3.9 or newer
 
 ## How to run
 
