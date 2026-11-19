@@ -12,7 +12,7 @@ public class Product {
             throw new IllegalArgumentException("Product name cannot be blank");
         }
         if (price == null || price.signum() < 0) {
-            throw new IllegalArgumentException("Price must be a positive value");
+            throw new IllegalArgumentException("Price cannot be negative");
         }
         this.id = id;
         this.name = name;

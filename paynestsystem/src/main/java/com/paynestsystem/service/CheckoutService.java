@@ -32,8 +32,8 @@ public class CheckoutService {
      *
      * @param order         the order to pay for
      * @param paymentMethod any payment rail
-     * @return {@code true} if payment succeeded and the order is now paid;
-     *         {@code false} if the rail declined (the order stays open)
+     * @return {@code true} if payment succeeded, or the order was free, and the
+     *         order is now paid; {@code false} if the rail declined (the order stays open)
      * @throws IllegalArgumentException if the order or payment method is missing
      * @throws IllegalStateException    if the order is empty or already paid
      */
@@ -63,6 +63,18 @@ public class CheckoutService {
         System.out.println("Amount due: " + amount);
         System.out.println("Payment rail: " + paymentMethod.getPaymentType());
         System.out.println("---------------------------------------");
+
+        // Rule: a free order (only R0,00 items) owes nothing, so no rail is asked to
+        // charge it. It is completed straight away instead of being declined.
+        if (total.signum() == 0) {
+            order.markPaid();
+            System.out.println("No payment needed: the order total is R0,00.");
+            System.out.println("---------------------------------------");
+            System.out.println("Order #" + order.getId() + " completed: nothing to pay. Status: "
+                    + order.getStatus());
+            System.out.println("=======================================");
+            return true;
+        }
 
         boolean paid = paymentProcessor.processPayment(paymentMethod, total.doubleValue());
 

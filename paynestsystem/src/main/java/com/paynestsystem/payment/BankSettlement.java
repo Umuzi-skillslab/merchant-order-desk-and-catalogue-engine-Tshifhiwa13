@@ -3,7 +3,7 @@ package com.paynestsystem.payment;
 /**
  * Capability group: rails that go through the banking system and settle later.
  */
-public interface BankSettlement {
+public interface BankSettlement extends Settlement {
 
     /**
      * When the money lands with the merchant.
@@ -20,4 +20,9 @@ public interface BankSettlement {
      * @return the bank reference
      */
     String getBankReference();
+
+    @Override
+    default String describeSettlement() {
+        return settlementTime() + " (reference: " + getBankReference() + ")";
+    }
 }

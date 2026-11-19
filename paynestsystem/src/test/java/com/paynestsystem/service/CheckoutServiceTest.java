@@ -96,6 +96,20 @@ class CheckoutServiceTest {
     }
 
     @Test
+    void freeOrderCompletesWithoutChargingAnyRail() {
+        Order order = new Order(38, customer);
+        order.addItem(new Product(6, "Free sample", BigDecimal.ZERO), 2);
+        RecordingPayment rail = new RecordingPayment(true);
+
+        String output = captureOutput(() -> assertTrue(checkoutService.checkout(order, rail)));
+
+        assertEquals(0, rail.getCalls());
+        assertEquals(OrderStatus.PAID, order.getStatus());
+        assertTrue(output.contains("No payment needed"));
+        assertFalse(output.contains("Payment failed"));
+    }
+
+    @Test
     void emptyOrderCannotBeCheckedOutAndRailIsNeverCalled() {
         Order empty = new Order(37, customer);
         RecordingPayment rail = new RecordingPayment(true);

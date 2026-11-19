@@ -27,7 +27,7 @@ mvn compile exec:java
 Tests expected result:
 
 ```text
-Tests run: 32, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 36, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 ### Choosing a payment rail for the demo:
@@ -105,18 +105,24 @@ Order #35 NOT completed: payment via WALLET failed. Status: OPEN
 
 ## Why a payment abstraction beats one big method
 
-One `pay(order, type)` method full of `if card / else if EFT / else if wallet` puts every rail's rules in one place. That method must be edited, re-tested and re-reviewed every time the business adds a rail, and it repeats validation, logging and failure handling in every branch. With the `PaymentMethod` abstraction, checkout depends on one contract: charge this Rand amount, say whether it worked, and give a label. Each rail keeps its own behaviour in its own class. Shared rules, such as rejecting zero or negative amounts, are written once in the parent class, so no rail can skip them. Adding a rail becomes adding a class, not changing code that already handles real money, and each rail can be tested on its own.
+One `pay(order, type)` method full of `if card / else if EFT / else if wallet` puts every rail's rules in one place. That method must be edited, re-tested and re-reviewed every time the business adds a rail, and it repeats validation, logging and failure handling in every branch. With the `PaymentMethod` abstraction, checkout depends on one contract: charge this Rand amount, say whether it worked, and give a label. Each rail keeps its own behaviour in its own class. Shared rules, such as rejecting zero or negative amounts, are written once in the `AmountValidator` helper that every rail calls. Adding a rail becomes adding a class, not changing code that already handles real money, and each rail can be tested on its own.
 
 ## Design
 
 ```mermaid
 classDiagram
     class PaymentMethod {
-        <<abstract>>
+        <<interface>>
         +processPayment(double amount) boolean
-        #isValidAmount(double amount) boolean
-        #doProcess(double amount)* boolean
-        +getPaymentType()* String
+        +getPaymentType() String
+    }
+    class AmountValidator {
+        +isValid(double amount)$ boolean
+        +validate(String paymentType, double amount)$ boolean
+    }
+    class Settlement {
+        <<interface>>
+        +describeSettlement() String
     }
     class InstantSettlement {
         <<interface>>
@@ -127,14 +133,16 @@ classDiagram
         +settlementTime() String
         +getBankReference() String
     }
+    Settlement <|-- InstantSettlement
+    Settlement <|-- BankSettlement
     class Refundable {
         <<interface>>
         +refund(double amount) boolean
     }
-    PaymentMethod <|-- CardPayment
-    PaymentMethod <|-- EftPayment
-    PaymentMethod <|-- WalletPayment
-    PaymentMethod <|-- BuyNowPayLaterPayment
+    PaymentMethod <|.. CardPayment
+    PaymentMethod <|.. EftPayment
+    PaymentMethod <|.. WalletPayment
+    PaymentMethod <|.. BuyNowPayLaterPayment
     InstantSettlement <|.. CardPayment
     Refundable <|.. CardPayment
     BankSettlement <|.. EftPayment
@@ -145,12 +153,14 @@ classDiagram
     CheckoutService ..> PaymentMethod : uses
     CheckoutService ..> Order : totals and marks paid
     PaymentProcessor ..> PaymentMethod : uses
+    PaymentProcessor ..> Settlement : describes
+    CardPayment ..> AmountValidator : validates
 ```
 
 | Package | Responsibility |
 |---|---|
 | `domain` | `Customer`, `Product`, `OrderItem`, `Order` and `OrderStatus`. Business rules only: no console output and no knowledge of payment rails. |
-| `payment` | `PaymentMethod` (parent class), the three capability interfaces, the four rails and `PaymentProcessor`. |
+| `payment` | The `PaymentMethod` interface, the `AmountValidator` helper, the capability interfaces (`Settlement`, `InstantSettlement`, `BankSettlement`, `Refundable`), the four rails and `PaymentProcessor`. |
 | `service` | `OrderService`, `OrderSummary` (prints the invoice) and `CheckoutService` (the single checkout path). |
 | `util` | `RandFormat`: formats Rand amounts the same way everywhere, so the invoice and the checkout match. |
 | `app` | `PayNestApplication`: builds the order and wires everything together. It is the only class that names concrete rails. |
@@ -161,20 +171,25 @@ classDiagram
 
 1. Rejects an empty order or an order that is already paid.
 2. Calculates the total once with `order.calculateTotal()`.
-3. Passes exactly that amount to the chosen rail through `PaymentProcessor`.
-4. Marks the order `PAID` only if the rail reports success. A declined payment leaves it `OPEN` so the customer can try another rail.
+3. If the total is R0,00 (only free items), completes the order straight away without asking any rail to charge it.
+4. Otherwise passes exactly that amount to the chosen rail through `PaymentProcessor`.
+5. Marks the order `PAID` only if the rail reports success. A declined payment leaves it `OPEN` so the customer can try another rail.
 
 It accepts the `PaymentMethod` type and has no `if` or `switch` on the payment type.
 
-### Parent class plus capability interfaces
+### PaymentMethod interface plus capability interfaces
 
-Following the updated course design, `PaymentMethod` is an abstract class rather than an interface. Its `processPayment` method is `final`: it always runs the shared amount check first, then calls the rail's own `doProcess`. Interfaces group the rails by what they can do:
+As the brief requires, `PaymentMethod` is an interface with two methods: `processPayment(double amount)` and `getPaymentType()`. Checkout depends only on this interface.
+
+The shared amount rule (reject zero, negative and non-numeric amounts) is written once in the `AmountValidator` helper. Every rail starts its `processPayment` with `AmountValidator.validate(...)`, and refundable rails use `AmountValidator.isValid(...)` before refunding. The test `sharedValidationRejectsZeroNegativeAndNonNumericAmountsOnEveryRail` checks that every rail applies it.
+
+Other interfaces group the rails by what they can do:
 
 - `InstantSettlement`: the merchant is paid immediately (card, wallet, BNPL).
 - `BankSettlement`: settles through the bank in 1-2 business days and has a bank reference (EFT).
 - `Refundable`: money can be sent back (card, wallet). EFT is deliberately not refundable, because an EFT refund is a new bank transfer that operations would start, not a reversal.
 
-`PaymentProcessor` checks the settlement group only to describe it in the console output. It never changes how a payment is processed.
+`InstantSettlement` and `BankSettlement` both extend `Settlement`, and each describes its own settlement ("immediate", or "1-2 business days (reference: EFT-0001)"). `PaymentProcessor` asks only the one `Settlement` interface for that text, so settlement reporting never grows into a rail-by-rail check when a rail is added, and it never changes how a payment is processed.
 
 ## Adding a new rail: 
 
@@ -195,7 +210,8 @@ Following the updated course design, `PaymentMethod` is an abstract class rather
 - **Simulated rails:**
   - Card and EFT always approve.
   - The wallet declines when its balance is too low, and the balance stays unchanged.
-  - BNPL declines totals above R20 000 and splits approved totals into 4 instalments.
+  - BNPL declines totals above R20 000 and splits approved totals into 4 instalments. The split is done in whole cents and leftover cents go to the first instalments, so the instalments always add up to exactly the total: R0,31 becomes R0,08 + R0,08 + R0,08 + R0,07.
+- **Free orders.** A product may cost R0,00 (for example a free sample). An order whose total is R0,00 owes nothing, so checkout completes it and marks it `PAID` without asking any rail to charge it, instead of the rail declining R0,00.
 - **Order lifecycle.** An empty order cannot be checked out. A paid order is locked: no more items can be added and it cannot be charged twice.
 
 ## Capstone 1 feedback addressed
@@ -207,15 +223,24 @@ Following the updated course design, `PaymentMethod` is an abstract class rather
 | More edge-case tests (empty order, decimal rounding) | New tests for an empty order's total, checking out and paying an empty order, decimal rounding, and charging the rounded total. |
 | Explain how the design supports future change | The design and "Adding a new rail" sections above. |
 
+## Capstone 3 review addressed
+
+| Review point | What changed |
+|---|---|
+| `PaymentMethod` must be an interface | `PaymentMethod` is now an interface (`processPayment`, `getPaymentType`). The shared amount check moved to the `AmountValidator` helper, which every rail calls. A test checks that `PaymentMethod` is an interface. |
+| Free items reach payment as R0,00 and are declined | Rule: a R0,00 order owes nothing, so checkout completes it without calling any rail. Tested in `freeOrderCompletesWithoutChargingAnyRail`. |
+| BNPL instalments for R0,31 add up to more than the total | Instalments are split in whole cents, with leftover cents on the first instalments, so they always add up to exactly the total. Tested for R0,31 and several other totals. |
+| Settlement reporting should not grow rail by rail | `InstantSettlement` and `BankSettlement` extend `Settlement` and describe themselves; `PaymentProcessor` asks only `Settlement`. |
+
 ## Tests
 
 | Test class | What it covers |
 |---|---|
 | `OrderItemTest` | Line totals, invalid quantity and missing product. |
 | `OrderTest` | Totals, empty order, rounding, read-only items, OPEN/PAID status and locking, invoice output. |
-| `PaymentMethodTest` | The brief's sample test, labels, shared validation on every rail, wallet balance and refunds, EFT reference, BNPL limit, capability groups. |
+| `PaymentMethodTest` | The brief's sample test, `PaymentMethod` is an interface, labels, shared validation on every rail, wallet balance and refunds, EFT reference, BNPL limit, BNPL instalments that always add up to the total, capability groups. |
 | `PaymentProcessorTest` | Success and failure console messages, settlement description, missing payment method. |
-| `CheckoutServiceTest` | The same order paid with all four rails, amount charged equals the order total, declined payment and retry, empty order, paying twice, missing inputs. |
+| `CheckoutServiceTest` | The same order paid with all four rails, amount charged equals the order total, a free order completes without charging any rail, declined payment and retry, empty order, paying twice, missing inputs. |
 
 ## Project structure
 
@@ -235,6 +260,8 @@ paynestsystem
     │   │   └── Product.java
     │   ├── payment
     │   │   ├── PaymentMethod.java
+    │   │   ├── AmountValidator.java
+    │   │   ├── Settlement.java
     │   │   ├── InstantSettlement.java
     │   │   ├── BankSettlement.java
     │   │   ├── Refundable.java

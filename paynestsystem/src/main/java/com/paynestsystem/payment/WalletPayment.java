@@ -8,7 +8,7 @@ import java.math.BigDecimal;
  * Payment by a digital wallet.
  * Settles instantly and can be refunded.
  */
-public class WalletPayment extends PaymentMethod implements InstantSettlement, Refundable {
+public class WalletPayment implements PaymentMethod, InstantSettlement, Refundable {
 
     /** Balance used when the demo does not specify one. */
     public static final double DEFAULT_BALANCE = 50_000.00;
@@ -33,7 +33,10 @@ public class WalletPayment extends PaymentMethod implements InstantSettlement, R
     }
 
     @Override
-    protected boolean doProcess(double amount) {
+    public boolean processPayment(double amount) {
+        if (!AmountValidator.validate(getPaymentType(), amount)) {
+            return false;
+        }
         BigDecimal charge = BigDecimal.valueOf(amount);
         if (charge.compareTo(balance) > 0) {
             System.out.println("[WALLET] Declined: balance R" + RandFormat.format(balance)
@@ -53,7 +56,7 @@ public class WalletPayment extends PaymentMethod implements InstantSettlement, R
 
     @Override
     public boolean refund(double amount) {
-        if (!isValidAmount(amount)) {
+        if (!AmountValidator.isValid(amount)) {
             return false;
         }
         balance = balance.add(BigDecimal.valueOf(amount));

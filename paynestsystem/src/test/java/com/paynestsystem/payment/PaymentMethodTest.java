@@ -2,6 +2,7 @@ package com.paynestsystem.payment;
 
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -93,5 +94,27 @@ class PaymentMethodTest {
         assertFalse(new EftPayment() instanceof Refundable);
         assertTrue(new BuyNowPayLaterPayment() instanceof InstantSettlement);
     }
-}
 
+    @Test
+    void paymentMethodIsAnInterface() {
+        assertTrue(PaymentMethod.class.isInterface());
+    }
+
+    @Test
+    void bnplSplitsAwkwardTotalsIntoCentsThatAddUpExactly() {
+        assertEquals(List.of(new BigDecimal("0.08"), new BigDecimal("0.08"),
+                        new BigDecimal("0.08"), new BigDecimal("0.07")),
+                BuyNowPayLaterPayment.instalmentsFor(0.31));
+    }
+
+    @Test
+    void bnplInstalmentsAlwaysAddUpToTheTotal() {
+        for (String total : List.of("0.31", "0.05", "100.01", "2510.00", "19999.99")) {
+            BigDecimal sum = BigDecimal.ZERO;
+            for (BigDecimal instalment : BuyNowPayLaterPayment.instalmentsFor(Double.parseDouble(total))) {
+                sum = sum.add(instalment);
+            }
+            assertEquals(new BigDecimal(total), sum, "instalments for R" + total);
+        }
+    }
+}
