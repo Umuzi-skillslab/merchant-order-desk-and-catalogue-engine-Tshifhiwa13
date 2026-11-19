@@ -2,10 +2,6 @@ package com.paynestsystem.payment;
 
 import com.paynestsystem.util.RandFormat;
 
-/**
- * Processes a payment through any {@link PaymentMethod} and prints the
- * console narrative support staff use to replay demos.
- */
 public class PaymentProcessor {
 
     /**
@@ -33,13 +29,13 @@ public class PaymentProcessor {
         return success;
     }
 
-   
+    /**
+     * Reporting only: each settlement group describes itself, so this method
+     * never grows when a rail is added and never changes how a payment is processed.
+     */
     private String describeSettlement(PaymentMethod method) {
-        if (method instanceof BankSettlement bank) {
-            return bank.settlementTime() + " (reference: " + bank.getBankReference() + ")";
-        }
-        if (method instanceof InstantSettlement instant) {
-            return instant.settlementTime();
+        if (method instanceof Settlement settlement) {
+            return settlement.describeSettlement();
         }
         return "not specified";
     }

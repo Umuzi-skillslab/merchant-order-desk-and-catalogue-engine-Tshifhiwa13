@@ -2,7 +2,7 @@ package com.paynestsystem.service;
 
 import com.paynestsystem.payment.PaymentMethod;
 
-class RecordingPayment extends PaymentMethod {
+class RecordingPayment implements PaymentMethod {
 
     private final boolean approve;
     private double chargedAmount = -1;
@@ -13,7 +13,7 @@ class RecordingPayment extends PaymentMethod {
     }
 
     @Override
-    protected boolean doProcess(double amount) {
+    public boolean processPayment(double amount) {
         chargedAmount = amount;
         calls++;
         return approve;

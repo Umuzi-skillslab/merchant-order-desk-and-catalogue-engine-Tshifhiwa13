@@ -4,7 +4,7 @@ package com.paynestsystem.payment;
  * Capability group: rails where the merchant receives the money immediately.
  * Card, wallet and buy-now-pay-later belong here; EFT does not.
  */
-public interface InstantSettlement {
+public interface InstantSettlement extends Settlement {
 
     /**
      * When the money lands with the merchant.
@@ -13,5 +13,10 @@ public interface InstantSettlement {
      */
     default String settlementTime() {
         return "immediate";
+    }
+
+    @Override
+    default String describeSettlement() {
+        return settlementTime();
     }
 }
